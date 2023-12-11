@@ -1,0 +1,37 @@
+# Используйте официальный образ Golang
+FROM golang:1.21.3
+
+# Установка переменных среды из .env файла
+ARG GO_API_PORT_REMOTE
+ENV GO_API_PORT_REMOTE=${GO_API_PORT_REMOTE}
+
+# Установка переменных среды DOMAIN
+ARG DOMAIN
+ENV DOMAIN=${DOMAIN}
+
+# Создайте директорию приложения внутри контейнера
+WORKDIR /app
+
+# Удалите все файлы из директории ./go в контейнере
+RUN rm -rf ./go/*
+
+# Создание файла go.mod
+RUN echo "module ${DOMAIN}/test" > go.mod
+
+# Установка swag
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
+# Скопируйте только нужные файлы из ./test1 в директорию ./go в контейнере
+COPY test1 .
+
+# Генерация swagger документации
+RUN /go/bin/swag init -g ./cmd/main.go
+
+# Сборка приложения
+RUN go build -o main ./cmd/main.go
+
+# Открытие порта, на котором будет работать приложение
+EXPOSE ${GO_API_PORT_REMOTE}
+
+# Запуск приложения
+CMD ["./test"]

@@ -1,0 +1,137 @@
+version: '3'
+services:
+
+  # Nginx Service
+  nginx:
+    image: nginx:1.25
+    container_name: nginx
+    restart: always
+    ports:
+      - "${NGINX_PORT_HOST}:${NGINX_PORT_REMOTE}"  # Перенаправление портов
+      - "${NGINX_PORT_SSL_HOST}:${NGINX_PORT_SSL_REMOTE}"  # Перенаправление защищенных портов
+    volumes:
+      - './html:/usr/share/nginx/html'  # Монтирование папки HTML
+      - './nginx/nginx/conf.d:/etc/nginx/conf.d'  # Монтирование конфигураций Nginx
+      - './nginx/nginx:/etc/nginx'  # Монтирование папки конфигурации Nginx
+      - './nginx/log:/log'  # Монтирование логов Nginx
+    healthcheck:  # Проверка состояния сервиса
+      test: [ "CMD", "curl", "-f", "http://${DOMAIN}" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      NGINX_PORT_HOST: ${NGINX_PORT_HOST}
+      NGINX_PORT_REMOTE: ${NGINX_PORT_REMOTE}
+      NGINX_PORT_SSL_HOST: ${NGINX_PORT_SSL_HOST}
+      NGINX_PORT_SSL_REMOTE: ${NGINX_PORT_SSL_REMOTE}
+      DOMAIN: ${DOMAIN}
+    networks:
+      - my_network
+
+  # PostgresDB Service
+  postgres:
+    image: postgres:16.0
+    container_name: postgres
+    restart: always
+    ports:
+      - ${POSTGRES_PORT_HOST}:${POSTGRES_PORT_REMOTE}
+    volumes:
+      - './volume/postgres:/var/lib/postgresql/data'
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_DB: "test"
+      POSTGRES_USER: "testuser"
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD} # Добавление переменной окружения для пароля суперпользователя
+      POSTGRES_PORT_HOST: ${POSTGRES_PORT_HOST}
+      POSTGRES_PORT_REMOTE: ${POSTGRES_PORT_REMOTE}
+      POSTGRES_ROOT_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+    networks:
+      - my_network
+
+
+  # MySQL Service
+  mysql:
+    image: mysql:8.1.0
+    container_name: mysql
+    restart: always
+    ports:
+      - "${MYSQL_PORT_HOST}:${MYSQL_PORT_REMOTE}"  # Перенаправление портов
+    volumes:
+      - './volume/mysql:/var/lib/mysql'  # Монтирование папки MySQL
+    healthcheck:  # Проверка состояния сервиса
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost --silent" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      MYSQL_PORT_HOST: ${MYSQL_PORT_HOST}
+      MYSQL_PORT_REMOTE: ${MYSQL_PORT_REMOTE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - my_network
+
+  # Go API Service
+  go_api:
+    build:
+      context: .
+      dockerfile: DockerfileGoApi
+    container_name: test1
+    restart: always
+    ports:
+      - "${GO_API_PORT_HOST}:${GO_API_PORT_REMOTE}"  # Перенаправление портов
+    volumes:
+      - './test1/logs.log:/app/logs.log'  # Монтирование файла логов
+    depends_on:
+      - nginx
+      - postgres
+    healthcheck:  # Проверка состояния сервиса
+      test: [ "CMD", "curl", "-f", "http://${DOMAIN}:${GO_API_PORT_HOST}/test/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      GO_API_PORT_HOST: ${GO_API_PORT_HOST}
+      GO_API_PORT_REMOTE: ${GO_API_PORT_REMOTE}
+      DOMAIN: ${DOMAIN}
+    networks:
+      - my_network
+
+  # Go Bot
+  improve_lives_bot:
+    build:
+      context: .
+      dockerfile: DockerfileImproveLivesBot
+    container_name: test2
+    restart: always
+    ports:
+      - "${GO_IMPROVE_LIVES_HOST}:${GO_IMPROVE_LIVES_REMOTE}"  # Перенаправление портов
+    depends_on:
+      - nginx
+      - mysql
+    healthcheck:  # Проверка состояния сервиса
+      test: [ "CMD", "curl", "-f", "http://${DOMAIN}:${GO_IMPROVE_LIVES_HOST}/test2/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      GO_IMPROVE_LIVES_HOST: ${GO_IMPROVE_LIVES_HOST}
+      GO_IMPROVE_LIVES_REMOTE: ${GO_IMPROVE_LIVES_REMOTE}
+      DOMAIN: ${DOMAIN}
+    networks:
+      - my_network
+
+# Docker Networks
+networks:
+  my_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "test ip..."  # Конфигурация сети
